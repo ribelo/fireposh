@@ -26,7 +26,7 @@
                                                                 [(keyword (demunge k))
                                                                  (if (string? v) (keyword (demunge v)) v)]) x)) x))
                                  (bean (j/call snap :val) :keywordize-keys false :recursive true))]
-                   (rf/dispatch [::create-connection.local-schema schema])))))))
+                   (rf/dispatch [:ribelo.fireposh.events/create-connection.local-schema schema])))))))
 
 (rf/reg-fx
  ::create-connection.local-schema
