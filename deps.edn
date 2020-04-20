@@ -1,15 +1,16 @@
 {:paths ["resources" "src/main"]
- :deps  {com.cognitect/transit-cljs {:mvn/version "0.8.256"}
-         appliedscience/js-interop  {:mvn/version "0.2.4"}
-         cljs-bean                  {:mvn/version "1.5.0"}
-         re-frame                   {:mvn/version "0.11.0"}
-         denistakeda/posh           {:mvn/version "0.5.8"}
-         datascript                 {:mvn/version "0.18.9"}
-         datascript-transit         {:mvn/version "0.3.0"}
-         re-posh                    {:git/url "https://github.com/ribelo/re-posh/"
-                                     :sha     "d9ecc30ac1e9cf2b321780430faa666b521839db"}
-         ribelo.firenze             {:git/url "https://github.com/ribelo/firenze"
-                                     :sha     "c374a919bf00b6d628f46e319c7f5286697aa53a"}}
+ :deps  {com.cognitect/transit-cljs  {:mvn/version "0.8.256"}
+         appliedscience/js-interop   {:mvn/version "0.2.4"}
+         cljs-bean                   {:mvn/version "1.5.0"}
+         re-frame                    {:mvn/version "0.11.0"}
+         denistakeda/posh            {:mvn/version "0.5.8"}
+         datascript                  {:mvn/version "0.18.9"}
+         datascript-transit          {:mvn/version "0.3.0"}
+         day8.re-frame/async-flow-fx {:mvn/version "0.1.0"}
+         re-posh                     {:git/url "https://github.com/ribelo/re-posh/"
+                                      :sha     "d9ecc30ac1e9cf2b321780430faa666b521839db"}
+         ribelo.firenze              {:git/url "https://github.com/ribelo/firenze"
+                                      :sha     "c374a919bf00b6d628f46e319c7f5286697aa53a"}}
  :aliases
  {:cljs
   {:extra-deps {thheller/shadow-cljs {:mvn/version "2.8.89"}}}}}
