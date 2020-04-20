@@ -1,5 +1,6 @@
 (ns ribelo.fireposh.events
   (:require
+   [day8.re-frame.async-flow-fx]
    [re-frame.core :as rf]
    [re-posh.core :as rp]
    [datascript.core :as d]
@@ -67,7 +68,8 @@
 (rf/reg-event-fx
  ::init
  (fn [_ [_ app-info]]
-   {:dispatch-n [[::init-firebase app-info]
-                 [::create-connection.firebase-schema]
-                 [::link-max-eid]
-                 [::link-db]]}))
+   {:async-flow
+    {:first-dispatch [::init-firebase app-info]
+     :rules          [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.firebase-schema]}
+                      {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-max-eid]}
+                      {:when :seen? :events [::link-max-eid] :dispatch [::link-db]}]}}))
