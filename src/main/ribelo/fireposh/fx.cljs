@@ -53,8 +53,10 @@
      (rdb/on :value [:_meta :max-eid] #(swap! conn assoc :max-eid %))
      (d/listen! conn ::link-max-eid
                 (fn [{:keys [tx-data]}]
-                  (let [max-eid (->> tx-data last first)]
-                    (rdb/set [:_meta :max-eid] max-eid)))))))
+                  (let [max-eid (:max-eid @conn)
+                        new-max-eid (->> tx-data last first)]
+                    (when (> new-max-eid max-eid)
+                      (rdb/set [:_meta :max-eid] max-eid))))))))
 
 (rf/reg-fx
  ::link-db
