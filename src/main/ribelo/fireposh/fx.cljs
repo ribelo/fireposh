@@ -6,6 +6,7 @@
    [datascript.core :as d]
    [ribelo.firenze.firebase :as fb]
    [ribelo.firenze.realtime-database :as rdb]
+   [ribelo.firenze.utils :as fu]
    [applied-science.js-interop :as j]
    [cljs-bean.core :refer [bean ->js ->clj]]))
 
@@ -23,8 +24,8 @@
                  (let [schema
                        (postwalk (fn [x]
                                    (if (map? x) (into {} (map (fn [[k v]]
-                                                                [(keyword (demunge k))
-                                                                 (if (string? v) (keyword (demunge v)) v)]) x)) x))
+                                                                [(fu/demunge k)
+                                                                 (if (string? v) (fu/demunge v) v)]) x)) x))
                                  (bean (j/call snap :val) :keywordize-keys false :recursive true))]
                    (rf/dispatch [:ribelo.fireposh.events/create-connection.local-schema schema])))))))
 
@@ -41,8 +42,8 @@
    (rdb/set [:_meta :schema]
             (postwalk (fn [x]
                         (if (map? x) (into {} (map (fn [[k v]]
-                                                     [(munge (->js k))
-                                                      (if (keyword? v) (munge (->js v)) v)]) x)) x))
+                                                     [(fu/munge k)
+                                                      (if (keyword? v) (fu/munge v) v)]) x)) x))
                       schema))))
 
 (rf/reg-fx
@@ -72,7 +73,7 @@
         m (persistent!
            (reduce-kv
             (fn [acc k v]
-              (assoc! acc (keyword (demunge k)) (->clj v)))
+              (assoc! acc (fu/demunge k) (->clj v)))
             (transient {})
             (bean (j/call snap :val) :keywordize-keys false)))]
     (d/transact! conn [(assoc m :db/id e)] ::sync)))
@@ -82,7 +83,7 @@
         m (persistent!
            (reduce-kv
             (fn [acc k v]
-              (assoc! acc (keyword (demunge k)) (->clj v)))
+              (assoc! acc (fu/demunge k) (->clj v)))
             (transient {})
             (bean (j/call snap :val) :keywordize-keys false)))]
     (d/transact! conn [(assoc m :db/id e)] ::sync)))
