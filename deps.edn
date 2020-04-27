@@ -7,10 +7,11 @@
          datascript                  {:mvn/version "0.18.9"}
          datascript-transit          {:mvn/version "0.3.0"}
          day8.re-frame/async-flow-fx {:mvn/version "0.1.0"}
+         com.taoensso/timbre         {:mvn/version "4.10.0"}
          re-posh                     {:git/url "https://github.com/ribelo/re-posh/"
                                       :sha     "d9ecc30ac1e9cf2b321780430faa666b521839db"}
          ribelo.firenze              {:git/url "https://github.com/ribelo/firenze"
-                                      :sha     "c374a919bf00b6d628f46e319c7f5286697aa53a"}}
+                                      :sha     "3ac864d1af81004f8daf33f6e45ae407fb5901ed"}}
  :aliases
  {:cljs
   {:extra-deps {thheller/shadow-cljs {:mvn/version "2.8.89"}}}}}
