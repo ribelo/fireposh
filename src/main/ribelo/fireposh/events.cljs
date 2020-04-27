@@ -71,5 +71,4 @@
    {:async-flow
     {:first-dispatch [::init-firebase app-info]
      :rules          [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.firebase-schema]}
-                      {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-max-eid]}
-                      {:when :seen? :events [::link-max-eid] :dispatch [::link-db]}]}}))
+                      {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-db]}]}}))
