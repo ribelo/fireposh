@@ -1,15 +1,16 @@
 (ns ribelo.fireposh.fx
   (:require
+   [applied-science.js-interop :as j]
+   [cljs-bean.core :refer [bean ->js ->clj]]
    [clojure.walk :refer [postwalk]]
-   [taoensso.timbre :as timbre]
+   [datascript.core :as d]
+   [posh.reagent :as p]
    [re-frame.core :as rf]
    [re-posh.core :as rp]
-   [datascript.core :as d]
    [ribelo.firenze.firebase :as fb]
    [ribelo.firenze.realtime-database :as rdb]
    [ribelo.firenze.utils :as fu]
-   [applied-science.js-interop :as j]
-   [cljs-bean.core :refer [bean ->js ->clj]]))
+   [taoensso.timbre :as timbre]))
 
 (def ^:private ids-map_ (atom {}))
 
