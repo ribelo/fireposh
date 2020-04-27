@@ -84,28 +84,30 @@
                           (rdb/set (conj path fid) (->js m')))))))))))
 
 (defn- on-child-added [conn snap]
-  (let [fid               (demunge (j/get snap :key))
-        eid               (get (clojure.set/map-invert @ids-map_) fid fid)
-        refs              (:db.type/ref (:rschema @conn))
-        m                 (persistent!
-                           (reduce-kv
-                            (fn [acc k v]
-                              (let [k* (fu/demunge k)
-                                    v* (->clj v)]
-                                (if-not (contains? refs k*)
-                                  (assoc! acc k* v*)
-                                  (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
-                                    (assoc! acc k* ref-eid)
-                                    (assoc! acc k* v*)))))
-                            (transient {:db/id eid})
-                            (bean (j/call snap :val) :keywordize-keys false)))
+  (let [fid            (demunge (j/get snap :key))
+        eid            (get (clojure.set/map-invert @ids-map_) fid fid)
+        refs           (:db.type/ref (:rschema @conn))
+        m              (persistent!
+                        (reduce-kv
+                         (fn [acc k v]
+                           (let [k* (fu/demunge k)
+                                 v* (->clj v)]
+                             (if-not (contains? refs k*)
+                               (assoc! acc k* v*)
+                               (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
+                                 (assoc! acc k* ref-eid)
+                                 (assoc! acc k* v*)))))
+                         (transient {:db/id eid})
+                         (bean (j/call snap :val) :keywordize-keys false)))
         {:keys [db-after tx-data tx-meta
-                tempids]} (d/with @conn [m])]
+                tempids]
+         :as   report} (d/with @conn [m])]
+    (reset! conn db-after)
     (doseq [[fid eid] (dissoc tempids :db/current-tx)]
       (when-not (get @ids-map_ eid)
         (swap! ids-map_ assoc eid fid)))
-    ;; TODO listener callback
-    (reset! conn db-after)))
+    (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+      (callback report))))
 
 (defn- on-child-removed [conn snap]
   (let [fid (demunge (j/get snap :key))]
