@@ -71,7 +71,7 @@
                               m'   (persistent!
                                     (reduce-kv
                                      (fn [acc k v]
-                                       (if-not (refs k)
+                                       (if-not (contains? refs k)
                                          (assoc! acc (fu/munge k) (->js v))
                                          (if-let [fid (get @ids-map_ (:db/id v))]
                                            (assoc! acc (fu/munge k) fid)
@@ -91,7 +91,7 @@
                             (fn [acc k v]
                               (let [k* (fu/demunge k)
                                     v* (->clj v)]
-                                (if-not (refs k*)
+                                (if-not (contains? refs k*)
                                   (assoc! acc k* v*)
                                   (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
                                     (assoc! acc k* ref-eid)
