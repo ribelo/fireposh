@@ -101,13 +101,13 @@
                          (bean (j/call snap :val) :keywordize-keys false)))
         {:keys [db-after tx-data tx-meta
                 tempids]
-         :as   report} (d/with @conn [m])]
+         :as   report} (d/with @conn [m] ::sync)]
+    (reset! conn db-after)
     (doseq [[fid eid] (dissoc tempids :db/current-tx)]
       (when-not (get @ids-map_ eid)
         (swap! ids-map_ assoc eid fid)))
     (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-      (callback report))
-    (reset! conn db-after)))
+      (callback report))))
 
 (defn- on-child-removed [conn snap]
   (let [fid (demunge (j/get snap :key))]
