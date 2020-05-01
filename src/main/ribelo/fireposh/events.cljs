@@ -28,7 +28,7 @@
 (rf/reg-event-fx
  ::create-connection.from-db
  (fn [_ [_ db]]
-   {::fx/create-connection.from-db}))
+   {::fx/create-connection.from-db db}))
 
 (rf/reg-event-fx
  ::set-schema
