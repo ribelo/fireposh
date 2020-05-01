@@ -41,6 +41,12 @@
      (rp/connect! conn))))
 
 (rf/reg-fx
+ ::create-connection.from-db
+ (fn [db]
+   (let [conn (d/conn-from-db db)]
+     (rp/connect! conn))))
+
+(rf/reg-fx
  ::set-schema
  (fn [schema]
    (rdb/set [:_meta :schema]

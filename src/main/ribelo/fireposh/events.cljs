@@ -26,6 +26,11 @@
    {::fx/create-connection.local-schema schema}))
 
 (rf/reg-event-fx
+ ::create-connection.from-db
+ (fn [_ [_ db]]
+   {::fx/create-connection.from-db}))
+
+(rf/reg-event-fx
  ::set-schema
  (fn [_ [_ schema]]
    {::fx/set-schema schema}))
@@ -66,9 +71,18 @@
    {:transact tx-data}))
 
 (rf/reg-event-fx
+ ::init-successful
+ (fn [_ _]))
+
+(rf/reg-event-fx
  ::init
- (fn [_ [_ app-info]]
+ (fn [_ [_ app-info ?db]]
    {:async-flow
     {:first-dispatch [::init-firebase app-info]
-     :rules          [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.firebase-schema]}
-                      {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-db]}]}}))
+     :rules          (if-not ?db
+                       [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.firebase-schema]}
+                        {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-db]}
+                        {:when :seen? :events [::link-db] :dispatch [::init-successful]}]
+                       [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.from-db ?db]}
+                        {:when :seen? :events [::create-connection.from-db] :dispatch [::link-db]}
+                        {:when :seen? :events [::link-db] :dispatch [::init-successful]}])}}))
