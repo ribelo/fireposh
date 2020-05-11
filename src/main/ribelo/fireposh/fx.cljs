@@ -1,6 +1,5 @@
 (ns ribelo.fireposh.fx
   (:require
-   [cljs.core.async :as a :refer [go go-loop chan >! <! timeout alts!]]
    [applied-science.js-interop :as j]
    [cljs-bean.core :refer [bean ->js ->clj]]
    [clojure.walk :refer [postwalk]]
@@ -11,10 +10,11 @@
    [ribelo.firenze.firebase :as fb]
    [ribelo.firenze.realtime-database :as rdb]
    [ribelo.firenze.utils :as fu]
+   [taoensso.encore :as e]
    [taoensso.timbre :as timbre]))
 
 (def ^:private ids-map_ (atom {}))
-(def ^:private transactor-chan (chan 1))
+(def ^:private transactions_ (atom []))
 
 (rf/reg-fx
  ::init-firebase
@@ -108,11 +108,7 @@
                        (assoc! acc k* v*)))))
                (transient {:db/id eid})
                (bean (j/call snap :val) :keywordize-keys false)))]
-    (go
-      (let [t     (timeout 1000)
-            [c v] (alts! [t [transactor-chan m]])]
-        (if (= c t)
-          (timbre/error "transactor channel is full?"))))))
+    (swap! transactions_ (conj m))))
 
 (defn- on-child-removed [snap]
   (let [conn @re-posh.db/store
@@ -141,29 +137,24 @@
    (doseq [path paths]
      (rdb/off path))))
 
-(defn create-transactor [size wait]
-  (let [conn @re-posh.db/store]
-    (go-loop [n size
-              tx-data (transient [])]
-      (if (> n 0)
-        (let [t     (timeout wait)
-              [v c] (alts! [transactor-chan t])]
-          (if (= c t)
-            (recur 0 tx-data)
-            (recur (dec n) (conj! tx-data v))))
-        (let [{:keys [db-after tx-data tx-meta
-                      tempids]
-               :as   report} (d/with @conn (persistent! tx-data) ::sync)]
-          (reset! conn db-after)
-          (doseq [[fid eid] (dissoc tempids :db/current-tx)]
-            (when-not (get @ids-map_ eid)
-              (swap! ids-map_ assoc eid fid)))
-          (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-            (callback report))
-          (<! (timeout wait))
-          (recur size (transient [])))))))
+(defn- sync-db-loop [conn timeout]
+  (swap!
+   transactions_
+   (fn [coll]
+     (when (seq coll)
+       (let [{:keys [db-after tx-data tx-meta
+                     tempids]
+              :as   report} (d/with @conn coll ::sync)]
+         (reset! conn db-after)
+         (doseq [[fid eid] (dissoc tempids :db/current-tx)]
+           (when-not (get @ids-map_ eid)
+             (swap! ids-map_ assoc eid fid)))
+         (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+           (callback report))))
+     []))
+  (e/after-timeout timeout (sync-db-loop conn ms)))
 
 (rf/reg-fx
- ::create-transactor
- (fn [[size wait]]
-   (create-transactor size wait)))
+ ::sync-db
+ (fn [timeout]
+   (sync-db @re-posh.db/store timeout)))

@@ -1,6 +1,5 @@
 {:paths ["resources" "src/main"]
- :deps  {org.clojure/core.async      {:mvn/version "1.2.593"}
-         com.cognitect/transit-cljs  {:mvn/version "0.8.256"}
+ :deps  {com.cognitect/transit-cljs  {:mvn/version "0.8.256"}
          appliedscience/js-interop   {:mvn/version "0.2.4"}
          cljs-bean                   {:mvn/version "1.5.0"}
          re-frame                    {:mvn/version "0.11.0"}
@@ -9,6 +8,7 @@
          datascript-transit          {:mvn/version "0.3.0"}
          day8.re-frame/async-flow-fx {:mvn/version "0.1.0"}
          com.taoensso/timbre         {:mvn/version "4.10.0"}
+         com.taoensso/encore         {:mvn/version "2.120.0"}
          re-posh                     {:git/url "https://github.com/ribelo/re-posh/"
                                       :sha     "d9ecc30ac1e9cf2b321780430faa666b521839db"}
          ribelo.firenze              {:git/url "https://github.com/ribelo/firenze"
