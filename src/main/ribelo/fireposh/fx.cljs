@@ -1,5 +1,6 @@
 (ns ribelo.fireposh.fx
   (:require
+   [cljs.core.async :as a :refer [go go-loop chan >! <! timeout alts!]]
    [applied-science.js-interop :as j]
    [cljs-bean.core :refer [bean ->js ->clj]]
    [clojure.walk :refer [postwalk]]
@@ -13,6 +14,7 @@
    [taoensso.timbre :as timbre]))
 
 (def ^:private ids-map_ (atom {}))
+(def ^:private transactor-chan (chan 1))
 
 (rf/reg-fx
  ::init-firebase
@@ -89,33 +91,52 @@
                                      (dissoc m :db/id)))]
                           (rdb/set (conj path fid) (->js m')))))))))))
 
-(defn- on-child-added [conn snap]
-  (let [fid            (demunge (j/get snap :key))
-        eid            (get (clojure.set/map-invert @ids-map_) fid fid)
-        refs           (:db.type/ref (:rschema @conn))
-        m              (persistent!
-                        (reduce-kv
-                         (fn [acc k v]
-                           (let [k* (fu/demunge k)
-                                 v* (->clj v)]
-                             (if-not (contains? refs k*)
-                               (assoc! acc k* v*)
-                               (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
-                                 (assoc! acc k* ref-eid)
-                                 (assoc! acc k* v*)))))
-                         (transient {:db/id eid})
-                         (bean (j/call snap :val) :keywordize-keys false)))
-        {:keys [db-after tx-data tx-meta
-                tempids]
-         :as   report} (d/with @conn [m] ::sync)]
-    (reset! conn db-after)
-    (doseq [[fid eid] (dissoc tempids :db/current-tx)]
-      (when-not (get @ids-map_ eid)
-        (swap! ids-map_ assoc eid fid)))
-    (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-      (callback report))))
+(def transactor-async-loop
+  (let [conn @re-posh.db/store]
+    (go-loop [n 128
+              tx-data (transient [])]
+      (if (> n 0)
+        (let [t     (timeout 1000)
+              [v c] (alts! [transactor-chan t])]
+          (if (= c t)
+            (recur 0 tx-data)
+            (recur (dec n) (conj! tx-data v))))
+        (let [{:keys [db-after tx-data tx-meta
+                      tempids]
+               :as   report} (d/with @conn (persistent! tx-data) ::sync)]
+          (reset! conn db-after)
+          (doseq [[fid eid] (dissoc tempids :db/current-tx)]
+            (when-not (get @ids-map_ eid)
+              (swap! ids-map_ assoc eid fid)))
+          (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+            (callback report))
+          (<! (timeout 1000))
+          (recur 128 (transient [])))))))
 
-(defn- on-child-removed [conn snap]
+(defn- on-child-added [snap]
+  (let [conn @re-posh.db/store
+        fid  (demunge (j/get snap :key))
+        eid  (get (clojure.set/map-invert @ids-map_) fid fid)
+        refs (:db.type/ref (:rschema @conn))
+        m    (persistent!
+              (reduce-kv
+               (fn [acc k v]
+                 (let [k* (fu/demunge k)
+                       v* (->clj v)]
+                   (if-not (contains? refs k*)
+                     (assoc! acc k* v*)
+                     (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
+                       (assoc! acc k* ref-eid)
+                       (assoc! acc k* v*)))))
+               (transient {:db/id eid})
+               (bean (j/call snap :val) :keywordize-keys false)))]
+    (go
+      (let [t     (timeout 1000)
+            [c v] (alts! [t [transactor-chan m]])]
+        (if (= c t)
+          (timbre/error "transactor channel is full?"))))))
+
+(defn- on-child-removed [snap]
   (let [fid (demunge (j/get snap :key))]
     (if-let [eid (get (clojure.set/map-invert @ids-map_) fid)]
       (do
@@ -129,11 +150,11 @@
    (doseq [path paths]
      (rdb/off path)
      (-> (rdb/ref path)
-         (j/call :on "child_added"   (partial on-child-added   @re-posh.db/store)))
+         (j/call :on "child_added"   on-child-added))
      (-> (rdb/ref path)
-         (j/call :on "child_changed" (partial on-child-added @re-posh.db/store)))
+         (j/call :on "child_changed" on-child-added))
      (-> (rdb/ref path)
-         (j/call :on "child_removed" (partial on-child-removed @re-posh.db/store))))))
+         (j/call :on "child_removed" on-child-removed)))))
 
 (rf/reg-fx
  ::unlink-paths

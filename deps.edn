@@ -1,5 +1,6 @@
 {:paths ["resources" "src/main"]
- :deps  {com.cognitect/transit-cljs  {:mvn/version "0.8.256"}
+ :deps  {org.clojure/core.async      {:mvn/version "1.2.593"}
+         com.cognitect/transit-cljs  {:mvn/version "0.8.256"}
          appliedscience/js-interop   {:mvn/version "0.2.4"}
          cljs-bean                   {:mvn/version "1.5.0"}
          re-frame                    {:mvn/version "0.11.0"}
