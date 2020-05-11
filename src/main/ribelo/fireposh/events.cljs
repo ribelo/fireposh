@@ -68,7 +68,7 @@
 (rf/reg-event-fx
  ::create-transactor
  (fn [_ [_ size wait]]
-   {::fx/create-transactor (or size 1024) (or wait 1000)}))
+   {::fx/create-transactor [(or size 1024) (or wait 1000)]}))
 
 (rf/reg-event-fx
  :transact!
