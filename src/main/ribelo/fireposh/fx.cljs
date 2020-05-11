@@ -61,9 +61,26 @@
                           x))
                       schema))))
 
+(defn- sync-db-loop [conn timeout]
+  (swap!
+   transactions_
+   (fn [coll]
+     (when (seq coll)
+       (let [{:keys [db-after tx-data tx-meta
+                     tempids]
+              :as   report} (d/with @conn coll ::sync)]
+         (reset! conn db-after)
+         (doseq [[fid eid] (dissoc tempids :db/current-tx)]
+           (when-not (get @ids-map_ eid)
+             (swap! ids-map_ assoc eid fid)))
+         (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+           (callback report))))
+     []))
+  (e/after-timeout timeout (sync-db-loop conn ms)))
+
 (rf/reg-fx
  ::link-db
- (fn [_]
+ (fn [timeout]
    (d/listen! @re-posh.db/store ::link-db
               (fn [{:keys [db-after tx-data tx-meta tempids]}]
                 (doseq [[_ eid] (dissoc tempids :db/current-tx)]
@@ -89,7 +106,8 @@
                                              acc))))
                                      (transient {})
                                      (dissoc m :db/id)))]
-                          (rdb/set (conj path fid) (->js m')))))))))))
+                          (rdb/set (conj path fid) (->js m')))))))))
+   (sync-db @re-posh.db/store timeout)))
 
 (defn- on-child-added [snap]
   (let [conn @re-posh.db/store
@@ -136,25 +154,3 @@
  (fn [paths]
    (doseq [path paths]
      (rdb/off path))))
-
-(defn- sync-db-loop [conn timeout]
-  (swap!
-   transactions_
-   (fn [coll]
-     (when (seq coll)
-       (let [{:keys [db-after tx-data tx-meta
-                     tempids]
-              :as   report} (d/with @conn coll ::sync)]
-         (reset! conn db-after)
-         (doseq [[fid eid] (dissoc tempids :db/current-tx)]
-           (when-not (get @ids-map_ eid)
-             (swap! ids-map_ assoc eid fid)))
-         (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-           (callback report))))
-     []))
-  (e/after-timeout timeout (sync-db-loop conn ms)))
-
-(rf/reg-fx
- ::sync-db
- (fn [timeout]
-   (sync-db @re-posh.db/store timeout)))
