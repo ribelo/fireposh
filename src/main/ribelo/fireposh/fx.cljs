@@ -115,7 +115,8 @@
           (timbre/error "transactor channel is full?"))))))
 
 (defn- on-child-removed [snap]
-  (let [fid (demunge (j/get snap :key))]
+  (let [conn @re-posh.db/store
+        fid  (demunge (j/get snap :key))]
     (if-let [eid (get (clojure.set/map-invert @ids-map_) fid)]
       (do
         (swap! ids-map_ dissoc eid)
