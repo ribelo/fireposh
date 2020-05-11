@@ -66,6 +66,11 @@
    {::fx/unlink-paths paths}))
 
 (rf/reg-event-fx
+ ::create-transactor
+ (fn [_ [_ size wait]]
+   {::fx/create-transactor (or size 1024) (or wait 1000)}))
+
+(rf/reg-event-fx
  :transact!
  (fn [_ [_ tx-data]]
    {:transact tx-data}))

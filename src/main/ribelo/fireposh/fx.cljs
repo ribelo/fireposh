@@ -91,28 +91,6 @@
                                      (dissoc m :db/id)))]
                           (rdb/set (conj path fid) (->js m')))))))))))
 
-(def transactor-async-loop
-  (let [conn @re-posh.db/store]
-    (go-loop [n 128
-              tx-data (transient [])]
-      (if (> n 0)
-        (let [t     (timeout 1000)
-              [v c] (alts! [transactor-chan t])]
-          (if (= c t)
-            (recur 0 tx-data)
-            (recur (dec n) (conj! tx-data v))))
-        (let [{:keys [db-after tx-data tx-meta
-                      tempids]
-               :as   report} (d/with @conn (persistent! tx-data) ::sync)]
-          (reset! conn db-after)
-          (doseq [[fid eid] (dissoc tempids :db/current-tx)]
-            (when-not (get @ids-map_ eid)
-              (swap! ids-map_ assoc eid fid)))
-          (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-            (callback report))
-          (<! (timeout 1000))
-          (recur 128 (transient [])))))))
-
 (defn- on-child-added [snap]
   (let [conn @re-posh.db/store
         fid  (demunge (j/get snap :key))
@@ -161,3 +139,30 @@
  (fn [paths]
    (doseq [path paths]
      (rdb/off path))))
+
+(defn create-transactor [size wait]
+  (let [conn @re-posh.db/store]
+    (go-loop [n size
+              tx-data (transient [])]
+      (if (> n 0)
+        (let [t     (timeout wait)
+              [v c] (alts! [transactor-chan t])]
+          (if (= c t)
+            (recur 0 tx-data)
+            (recur (dec n) (conj! tx-data v))))
+        (let [{:keys [db-after tx-data tx-meta
+                      tempids]
+               :as   report} (d/with @conn (persistent! tx-data) ::sync)]
+          (reset! conn db-after)
+          (doseq [[fid eid] (dissoc tempids :db/current-tx)]
+            (when-not (get @ids-map_ eid)
+              (swap! ids-map_ assoc eid fid)))
+          (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+            (callback report))
+          (<! (timeout wait))
+          (recur size (transient [])))))))
+
+(rf/reg-fx
+ ::create-transactor
+ (fn [[size wait]]
+   (create-transactor size wait)))
