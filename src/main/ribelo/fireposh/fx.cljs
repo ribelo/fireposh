@@ -4,17 +4,16 @@
    [cljs-bean.core :refer [bean ->js ->clj]]
    [clojure.walk :refer [postwalk]]
    [datascript.core :as d]
+   [datascript.transit :as dt]
    [posh.reagent :as p]
    [re-frame.core :as rf]
    [re-posh.core :as rp]
    [ribelo.firenze.firebase :as fb]
    [ribelo.firenze.realtime-database :as rdb]
-   [ribelo.firenze.utils :as fu]
    [taoensso.encore :as e]
    [taoensso.timbre :as timbre]))
 
 (def ^:private ids-map_ (atom {}))
-(def ^:private transactions_ (atom []))
 
 (rf/reg-fx
  ::init-firebase
@@ -27,19 +26,13 @@
    (-> (rdb/ref [:_meta :schema])
        (j/call :once "value"
                (fn [snap]
-                 (let [schema
-                       (postwalk (fn [x]
-                                   (if (map? x) (into {} (map (fn [[k v]]
-                                                                [(fu/demunge k)
-                                                                 (if (string? v) (fu/demunge v) v)]) x)) x))
-                                 (bean (j/call snap :val) :keywordize-keys false :recursive true))]
-                   (rf/dispatch [:ribelo.fireposh.events/create-connection.local-schema schema])))))))
+                 (let [schema (dt/read-transit-str (j/call snap :val))]
+                   (rf/dispatch [:ribelo.fireposh.events/create-connection.from-schema schema])))))))
 
 (rf/reg-fx
- ::create-connection.local-schema
+ ::create-connection.from-schema
  (fn [schema]
-   (let [schema' (or schema ( [:_meta :schema]))
-         conn    (d/create-conn schema)]
+   (let [conn (d/create-conn schema)]
      (rp/connect! conn))))
 
 (rf/reg-fx
@@ -51,32 +44,7 @@
 (rf/reg-fx
  ::set-schema
  (fn [schema]
-   (rdb/set [:_meta :schema]
-            (postwalk (fn [x]
-                        (if (map? x)
-                          (into {} (map
-                                    (fn [[k v]]
-                                      [(fu/munge k)
-                                       (if (keyword? v) (fu/munge v) v)]) x))
-                          x))
-                      schema))))
-
-(defn- sync-db-loop [conn timeout]
-  (swap!
-   transactions_
-   (fn [coll]
-     (when (seq coll)
-       (let [{:keys [db-after tx-data tx-meta
-                     tempids]
-              :as   report} (d/with @conn coll ::sync)]
-         (reset! conn db-after)
-         (doseq [[fid eid] (dissoc tempids :db/current-tx)]
-           (when-not (get @ids-map_ eid)
-             (swap! ids-map_ assoc eid fid)))
-         (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
-           (callback report))))
-     []))
-  (e/after-timeout timeout (sync-db-loop conn ms)))
+   (rdb/set [:_meta :schema] (dt/write-transit-str schema))))
 
 (rf/reg-fx
  ::link-db
@@ -87,55 +55,54 @@
                   (when-not (get @ids-map_ eid)
                     (swap! ids-map_ assoc eid (str (d/squuid)))))
                 (when-not (= ::sync tx-meta)
-                  ;; TODO add remove from ids-map_ when retract entity
                   (doseq [eid (into [] (comp (map first) (distinct)) tx-data)]
                     (let [{:keys [db/path]
-                           :as   m} (d/pull db-after '[*] eid)]
+                           :as   m} (into {} (d/touch (d/entity eid)))]
                       (when path
                         (let [refs (:db.type/ref (:rschema db-after))
                               fid  (get @ids-map_ eid)
-                              m'   (persistent!
+                              m*   (persistent!
                                     (reduce-kv
                                      (fn [acc k v]
-                                       (if-not (contains? refs k)
-                                         (assoc! acc (fu/munge k) (->js v))
-                                         (if-let [fid (get @ids-map_ (:db/id v))]
-                                           (assoc! acc (fu/munge k) fid)
-                                           (do
-                                             (timbre/error :link-db (str "no fid for eid: " (:db/id v)))
-                                             acc))))
-                                     (transient {})
-                                     (dissoc m :db/id)))]
-                          (rdb/set (conj path fid) (->js m')))))))))
-   (sync-db @re-posh.db/store timeout)))
+                                       (if (contains? refs k)
+                                         (assoc! acc k ((:db/id v) @ids-map_))
+                                         acc))
+                                     (transient m)
+                                     refs))]
+                          (rdb/set (conj path fid) (dt/write-transit-str m*)))))))))))
 
 (defn- on-child-added [snap]
-  (let [conn @re-posh.db/store
-        fid  (demunge (j/get snap :key))
-        eid  (get (clojure.set/map-invert @ids-map_) fid fid)
-        refs (:db.type/ref (:rschema @conn))
-        m    (persistent!
-              (reduce-kv
-               (fn [acc k v]
-                 (let [k* (fu/demunge k)
-                       v* (->clj v)]
-                   (if-not (contains? refs k*)
-                     (assoc! acc k* v*)
-                     (if-let [ref-eid (get (clojure.set/map-invert @ids-map_) (demunge v*))]
-                       (assoc! acc k* ref-eid)
-                       (assoc! acc k* v*)))))
-               (transient {:db/id eid})
-               (bean (j/call snap :val) :keywordize-keys false)))]
-    (swap! transactions_ (conj m))))
+  (let [conn           @re-posh.db/store
+        inv-ids-map    (clojure.set/map-invert @ids-map_)
+        fid            (demunge (j/get snap :key))
+        eid            (get inv-ids-map fid fid)
+        refs           (:db.type/ref (:rschema @conn))
+        m              (persistent!
+                        (reduce-kv
+                         (fn [acc k v]
+                           (if (contains? refs k)
+                             (assoc! acc k (get inv-ids-map v))
+                             (assoc! acc k v)))
+                         (transient {:db/id eid})
+                         (dt/read-transit-str (j/call snap :val))))
+        {:keys [db-after tx-data tx-meta
+                tempids]
+         :as   report} (d/with @conn [m] ::sync)
+        (reset! conn db-after)
+        (doseq [[fid eid] (dissoc tempids :db/current-tx)]
+          (when-not (get @ids-map_ eid)
+            (swap! ids-map_ assoc eid fid)))
+        (doseq [[_ callback] (some-> (:listeners (meta conn)) (deref))]
+          (callback report))]))
 
 (defn- on-child-removed [snap]
-  (let [conn @re-posh.db/store
-        fid  (demunge (j/get snap :key))]
-    (if-let [eid (get (clojure.set/map-invert @ids-map_) fid)]
-      (do
-        (swap! ids-map_ dissoc eid)
-        (d/transact! conn [[:db.fn/retractEntity eid]])) ; with sync, refs must be updated
-      (timbre/error :on-child-removed (str "no eid for fid: " fid)))))
+  (let [conn        @re-posh.db/store
+        inv-ids-map (clojure.set/map-invert @ids-map_)
+        fid         (demunge (j/get snap :key))]
+    (when-let [eid (get inv-ids-map fid)]
+      (swap! ids-map_ dissoc eid)
+      ;; with sync, refs must be updated
+      (d/transact! conn [[:db.fn/retractEntity eid]]) )))
 
 (rf/reg-fx
  ::link-paths

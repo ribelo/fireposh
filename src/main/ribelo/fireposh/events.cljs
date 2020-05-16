@@ -4,16 +4,19 @@
    [re-frame.core :as rf]
    [re-posh.core :as rp]
    [datascript.core :as d]
+   [datascript.transit :as dt]
    [ribelo.firenze.firebase :as fb]
+   [ribelo.firenze.utils :as fu]
    [ribelo.fireposh.fx :as fx]
    [ribelo.firenze.realtime-database :as rdb]
    [applied-science.js-interop :as j]
    [cljs-bean.core :refer [bean ->js ->clj]]))
 
+
 (rf/reg-event-fx
  ::init-firebase
- (fn [_ [_ app-info]]
-   {::fx/init-firebase app-info}))
+ (fn [_ [_ _]]
+   {::fx/init-firebase nil}))
 
 (rf/reg-event-fx
  ::create-connection.firebase-schema
@@ -21,9 +24,9 @@
    {::fx/create-connection.firebase-schema nil}))
 
 (rf/reg-event-fx
- ::create-connection.local-schema
+ ::create-connection.from-schema
  (fn [_ [_ schema]]
-   {::fx/create-connection.local-schema schema}))
+   {::fx/create-connection.from-schema schema}))
 
 (rf/reg-event-fx
  ::create-connection.from-db
@@ -66,28 +69,19 @@
    {::fx/unlink-paths paths}))
 
 (rf/reg-event-fx
- ::create-transactor
- (fn [_ [_ size wait]]
-   {::fx/create-transactor [(or size 1024) (or wait 1000)]}))
-
-(rf/reg-event-fx
  :transact!
  (fn [_ [_ tx-data]]
    {:transact tx-data}))
 
-(rf/reg-event-fx
- ::init-successful
- (fn [_ _]))
-
-(rf/reg-event-fx
- ::init
- (fn [_ [_ app-info ?db]]
-   {:async-flow
-    {:first-dispatch [::init-firebase app-info]
-     :rules          (if-not ?db
-                       [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.firebase-schema]}
-                        {:when :seen? :events [::create-connection.local-schema] :dispatch [::link-db]}
-                        {:when :seen? :events [::link-db] :dispatch [::init-successful]}]
-                       [{:when :seen? :events [::init-firebase] :dispatch [::create-connection.from-db ?db]}
-                        {:when :seen? :events [::create-connection.from-db] :dispatch [::link-db]}
-                        {:when :seen? :events [::link-db] :dispatch [::init-successful]}])}}))
+(comment
+  (def app-info {"apiKey"             "AIzaSyB40UqlQQKsvs6FyhQSVOZpZgXl9vYTRa4",
+                 "authDomain"         "mannheim-6c4c9.firebaseapp.com",
+                 "databaseURL"        "https://mannheim-6c4c9.firebaseio.com",
+                 "projectId"          "mannheim-6c4c9",
+                 "storageBucket"      "mannheim-6c4c9.appspot.com",
+                 "messagingSenderId"  "7595437391",
+                 "appId"              "1:7595437391:web:c8b9b7a11cc00c829da93a"})
+  (rf/dispatch [::init-firebase app-info])
+  (rdb/database)
+  (rdb/remove [:_meta])
+  (j/call (rdb/ref [:_metas "sd"])))
