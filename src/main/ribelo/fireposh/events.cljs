@@ -15,8 +15,8 @@
 
 (rf/reg-event-fx
  ::init-firebase
- (fn [_ [_ _]]
-   {::fx/init-firebase nil}))
+ (fn [_ [_ app-info]]
+   {::fx/init-firebase app-info}))
 
 (rf/reg-event-fx
  ::create-connection.firebase-schema
@@ -37,11 +37,6 @@
  ::set-schema
  (fn [_ [_ schema]]
    {::fx/set-schema schema}))
-
-(rf/reg-event-fx
- ::link-max-eid
- (fn [_ _]
-   {::fx/link-max-eid nil}))
 
 (rf/reg-event-fx
  ::link-db
@@ -72,16 +67,3 @@
  :transact!
  (fn [_ [_ tx-data]]
    {:transact tx-data}))
-
-(comment
-  (def app-info {"apiKey"             "AIzaSyB40UqlQQKsvs6FyhQSVOZpZgXl9vYTRa4",
-                 "authDomain"         "mannheim-6c4c9.firebaseapp.com",
-                 "databaseURL"        "https://mannheim-6c4c9.firebaseio.com",
-                 "projectId"          "mannheim-6c4c9",
-                 "storageBucket"      "mannheim-6c4c9.appspot.com",
-                 "messagingSenderId"  "7595437391",
-                 "appId"              "1:7595437391:web:c8b9b7a11cc00c829da93a"})
-  (rf/dispatch [::init-firebase app-info])
-  (rdb/database)
-  (rdb/remove [:_meta])
-  (j/call (rdb/ref [:_metas "sd"])))
