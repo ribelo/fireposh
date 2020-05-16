@@ -57,7 +57,7 @@
                 (when-not (= ::sync tx-meta)
                   (doseq [eid (into [] (comp (map first) (distinct)) tx-data)]
                     (let [{:keys [db/path]
-                           :as   m} (into {} (d/touch (d/entity eid)))]
+                           :as   m} (into {} (d/touch (d/entity @@re-posh.db/store eid)))]
                       (when path
                         (let [refs (:db.type/ref (:rschema db-after))
                               fid  (get @ids-map_ eid)
