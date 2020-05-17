@@ -15,7 +15,7 @@
 
 (def ^:private ids-map_ (atom {}))
 (def ^:private snaps_ (atom []))
-(def ^:private limiter (e/limiter {:main [12 1000]}))
+(def ^:private limiter (e/limiter {:main [36 3000]}))
 (def ^:private data-loading-future_ (atom nil))
 
 (rf/reg-fx
